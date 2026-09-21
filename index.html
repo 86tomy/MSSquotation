@@ -46,6 +46,13 @@
             <div @click="view = 'clients'" :class="view === 'clients' ? 'nav-active' : ''" class="nav-link">Database Klien</div>
             <div @click="view = 'branding'" :class="view === 'branding' ? 'nav-active' : ''" class="nav-link">Profile Bisnis</div>
         </nav>
+        
+        <!-- Input Kurs USD yang Dapat Diedit -->
+        <div class="mb-4 bg-white/10 p-3 rounded-xl border border-white/20">
+            <label class="text-[9px] font-black uppercase text-orange-400 block mb-1">Kurs USD (IDR)</label>
+            <input type="number" x-model.number="exchangeRate" class="w-full bg-black/50 text-white font-black text-sm px-3 py-1.5 rounded border border-white/20 focus:border-[#F36F21] outline-none">
+        </div>
+
         <div class="mt-auto border-t border-white/10 pt-4 space-y-2">
             <button @click="exportData()" class="w-full py-3 bg-green-600 text-white text-[10px] font-black rounded-xl uppercase">Backup Data</button>
             <label class="w-full py-3 bg-blue-600 text-white text-[10px] font-black rounded-xl uppercase text-center block cursor-pointer">
