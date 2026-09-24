@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MSSTech ERP v126 - FINAL STABLE</title>
+    <title>MSSTech ERP - Multi Document & Auto Migration</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -47,22 +47,19 @@
             <div @click="view = 'branding'" :class="view === 'branding' ? 'nav-active' : ''" class="nav-link">Profile Bisnis</div>
         </nav>
         
-        <!-- Input Kurs USD yang Dapat Diedit -->
         <div class="mb-4 bg-white/10 p-3 rounded-xl border border-white/20">
             <label class="text-[9px] font-black uppercase text-orange-400 block mb-1">Kurs USD (IDR)</label>
             <input type="number" x-model.number="exchangeRate" class="w-full bg-black/50 text-white font-black text-sm px-3 py-1.5 rounded border border-white/20 focus:border-[#F36F21] outline-none">
         </div>
-
-        <div class="mt-auto border-t border-white/10 pt-4 space-y-2">
-            <button @click="exportData()" class="w-full py-3 bg-green-600 text-white text-[10px] font-black rounded-xl uppercase">Backup Data</button>
-            <label class="w-full py-3 bg-blue-600 text-white text-[10px] font-black rounded-xl uppercase text-center block cursor-pointer">
-                Restore Data
-                <input type="file" class="hidden" @change="importData($event)">
-            </label>
-        </div>
     </aside>
 
     <main class="main-content">
+        <!-- NOTIFIKASI MIGRASI DATA -->
+        <div x-show="isMigrating" x-cloak class="no-print mb-6 p-4 bg-amber-500 text-white rounded-2xl font-bold flex items-center justify-between shadow-lg">
+            <span> Sedang memindahkan data lama ke struktur database baru... Mohon tunggu.</span>
+        </div>
+
+        <!-- FORM BUAT PENAWARAN -->
         <div x-show="view === 'create'" x-cloak class="no-print">
             <h1 class="text-5xl font-black text-slate-900 uppercase italic mb-8">BUAT PENAWARAN</h1>
             <div class="grid grid-cols-2 gap-6 mb-8">
@@ -70,7 +67,7 @@
                     <h3 class="font-black text-blue-600 uppercase mb-4 text-xs italic">Data Klien</h3>
                     <select @change="selectClient($event.target.value)" class="u-input mb-4 font-bold">
                         <option value="">-- PILIH DARI DATABASE --</option>
-                        <template x-for="c in clients"><option :value="c.id" x-text="c.name"></option></template>
+                        <template x-for="c in clients" :key="c.id"><option :value="c.id" x-text="c.name"></option></template>
                     </select>
                     <input type="text" x-model="form.clientName" class="u-input mb-4" placeholder="Nama Klien">
                     <textarea x-model="form.clientAddress" class="u-input !h-24 !rounded-3xl py-4" placeholder="Alamat Klien"></textarea>
@@ -89,7 +86,7 @@
                         <div class="flex items-center gap-4">
                             <div class="flex items-center gap-2">
                                 <span class="text-[10px] font-bold uppercase">Disc %:</span>
-                                <input type="number" x-model="group.discount" class="w-16 h-8 rounded bg-white/20 text-center font-bold outline-none text-white">
+                                <input type="number" x-model.number="group.discount" class="w-16 h-8 rounded bg-white/20 text-center font-bold outline-none text-white">
                             </div>
                             <button @click="form.groups.splice(gIdx, 1)" class="text-red-400 text-xs font-bold uppercase">Hapus</button>
                         </div>
@@ -114,15 +111,15 @@
                                         <td class="py-4 px-2">
                                             <select @change="syncProduct(item, $event.target.value)" class="w-full text-[10px] font-bold border rounded mb-1 bg-slate-50 p-1">
                                                 <option value="">-- PILIH PRODUK --</option>
-                                                <template x-for="p in catalog"><option :value="p.id" x-text="p.name"></option></template>
+                                                <template x-for="p in catalog" :key="p.id"><option :value="p.id" x-text="p.name"></option></template>
                                             </select>
                                             <input type="text" x-model="item.name" class="font-black text-blue-900 w-full outline-none text-xs" placeholder="Nama Barang">
                                             <textarea x-model="item.description" class="w-full text-[10px] text-slate-500 mt-2 bg-white border border-slate-100 p-2 rounded h-20 outline-none" placeholder="Spesifikasi..."></textarea>
                                         </td>
-                                        <td class="py-4"><input type="number" x-model="item.qty" class="w-full text-center font-black outline-none bg-slate-50 rounded py-2"></td>
+                                        <td class="py-4"><input type="number" x-model.number="item.qty" class="w-full text-center font-black outline-none bg-slate-50 rounded py-2"></td>
                                         <td class="py-4"><input type="text" x-model="item.unit" class="w-full text-center font-bold outline-none bg-slate-50 rounded py-2"></td>
                                         <td class="py-4 text-right font-black" x-text="formatIDR(calculatePriceWithMargins(item))"></td>
-                                        <td class="py-4 text-right font-black text-blue-900" x-text="formatIDR(calculatePriceWithMargins(item) * item.qty)"></td>
+                                        <td class="py-4 text-right font-black text-blue-900" x-text="formatIDR(calculatePriceWithMargins(item) * (item.qty || 0))"></td>
                                         <td class="py-4 text-center"><button @click="removeItem(gIdx, iIdx)" class="text-red-300 text-xl font-bold">&times;</button></td>
                                     </tr>
                                 </template>
@@ -141,11 +138,13 @@
             </div>
 
             <div class="u-card p-10 bg-slate-900 text-white flex justify-between items-center">
-                <button @click="saveQuote()" class="bg-[#F36F21] px-12 py-5 rounded-full font-black text-xl hover:scale-105 transition-all">SIMPAN DATA</button>
+                <button @click="saveQuote()" :disabled="isSaving" class="bg-[#F36F21] px-12 py-5 rounded-full font-black text-xl hover:scale-105 transition-all disabled:opacity-50">
+                    <span x-text="isSaving ? 'MENYIMPAN...' : 'SIMPAN DATA'"></span>
+                </button>
                 <div class="text-right flex items-center gap-10">
                     <div>
                         <p class="text-[10px] font-bold opacity-40 uppercase mb-1">Discount Akhir (%)</p>
-                        <input type="number" x-model="form.globalDiscount" class="w-24 bg-white/10 border border-white/20 rounded-lg text-center font-bold text-2xl outline-none text-orange-400">
+                        <input type="number" x-model.number="form.globalDiscount" class="w-24 bg-white/10 border border-white/20 rounded-lg text-center font-bold text-2xl outline-none text-orange-400">
                     </div>
                     <div>
                         <p class="text-[10px] font-bold opacity-40 uppercase">Grand Total (PPN 11%)</p>
@@ -155,6 +154,7 @@
             </div>
         </div>
 
+        <!-- PRINT AREA -->
         <div x-show="view === 'print'" class="bg-white p-4" id="print-area">
             <div class="flex justify-between items-start mb-8 border-b-[4px] border-[#000080] border-navy pb-6">
                 <div class="flex gap-6 items-center">
@@ -204,7 +204,7 @@
                                     <td class="py-3 px-1 text-center font-bold" x-text="item.qty"></td>
                                     <td class="py-3 px-1 text-center font-bold" x-text="item.unit"></td>
                                     <td class="py-3 px-1 text-right font-bold" x-text="formatIDR(calculatePriceWithMargins(item))"></td>
-                                    <td class="py-3 px-1 text-right font-black" x-text="formatIDR(calculatePriceWithMargins(item) * item.qty)"></td>
+                                    <td class="py-3 px-1 text-right font-black" x-text="formatIDR(calculatePriceWithMargins(item) * (item.qty || 0))"></td>
                                 </tr>
                             </template>
                         </tbody>
@@ -212,12 +212,12 @@
                             <template x-if="g.discount > 0">
                                 <tr>
                                     <td colspan="5" class="py-2 text-right font-bold text-red-600 italic">Discount <span x-text="g.name"></span> (<span x-text="g.discount"></span>%)</td>
-                                    <td class="py-2 text-right font-bold text-red-600" x-text="'-' + formatIDR(g.items.reduce((a, b) => a + (calculatePriceWithMargins(b) * b.qty), 0) * (g.discount/100))"></td>
+                                    <td class="py-2 text-right font-bold text-red-600" x-text="'-' + formatIDR(g.items.reduce((a, b) => a + (calculatePriceWithMargins(b) * (b.qty || 0)), 0) * (g.discount/100))"></td>
                                 </tr>
                             </template>
                             <tr>
                                 <td colspan="5" class="py-2 text-right font-black text-[#000080] print-navy uppercase italic">Subtotal <span x-text="g.name"></span></td>
-                                <td class="py-2 text-right font-black text-[#000080] print-navy" x-text="formatIDR(g.items.reduce((a, b) => a + (calculatePriceWithMargins(b) * b.qty), 0) * (1 - (g.discount/100)))"></td>
+                                <td class="py-2 text-right font-black text-[#000080] print-navy" x-text="formatIDR(g.items.reduce((a, b) => a + (calculatePriceWithMargins(b) * (b.qty || 0)), 0) * (1 - (g.discount/100)))"></td>
                             </tr>
                         </tfoot>
                     </table>
@@ -256,6 +256,7 @@
             </div>
         </div>
 
+        <!-- DASHBOARD -->
         <div x-show="view === 'dashboard'" x-cloak class="no-print">
             <h1 class="text-5xl font-black text-slate-900 uppercase italic mb-8">DASHBOARD</h1>
             <div class="u-card">
@@ -264,7 +265,7 @@
                         <tr><th class="px-8 py-4 text-left">Quotation</th><th class="px-8 py-4 text-left">Klien</th><th class="px-8 py-4 text-right">Total</th><th class="px-8 py-4 text-center">Aksi</th></tr>
                     </thead>
                     <tbody>
-                        <template x-for="(q, idx) in history" :key="q.id">
+                        <template x-for="q in history" :key="q.id">
                             <tr class="border-b hover:bg-slate-50">
                                 <td class="px-8 py-6 font-bold" x-text="q.number"></td>
                                 <td class="px-8 py-6 font-black uppercase text-blue-900" x-text="q.clientName"></td>
@@ -272,15 +273,19 @@
                                 <td class="px-8 py-6 text-center flex justify-center gap-2">
                                     <button @click="printQuote(q)" class="bg-blue-600 text-white px-3 py-1 rounded-full text-[10px] font-black">Print</button>
                                     <button @click="editQuote(q)" class="bg-amber-500 text-white px-3 py-1 rounded-full text-[10px] font-black">Edit</button>
-                                    <button @click="deleteQuote(idx)" class="bg-red-100 text-red-600 px-3 py-1 rounded-full text-[10px] font-black">Hapus</button>
+                                    <button @click="deleteQuote(q.id)" class="bg-red-100 text-red-600 px-3 py-1 rounded-full text-[10px] font-black">Hapus</button>
                                 </td>
                             </tr>
                         </template>
+                        <tr x-show="history.length === 0">
+                            <td colspan="4" class="px-8 py-6 text-center text-slate-400 font-bold">Belum ada data penawaran.</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
         </div>
 
+        <!-- MASTER KATALOG -->
         <div x-show="view === 'catalog'" x-cloak class="no-print">
             <h1 class="text-5xl font-black text-slate-900 uppercase italic mb-8">MASTER KATALOG</h1>
             <div class="u-card p-10 bg-slate-900 text-white mb-8 border-b-[10px] border-[#F36F21]">
@@ -304,7 +309,6 @@
                             </select>
                         </div>
                         
-                        <!-- Rincian Detail Item (Modal & Sub-Item) -->
                         <div class="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3">
                             <div class="flex justify-between items-center">
                                 <label class="text-xs font-black uppercase text-orange-400 italic">Rincian Detail Perhitungan Item</label>
@@ -314,7 +318,7 @@
                                 <template x-for="(d, dIdx) in newProd.details" :key="dIdx">
                                     <div class="flex items-center gap-2 bg-black/30 p-2 rounded-xl border border-white/10">
                                         <input type="text" x-model="d.name" placeholder="Nama Komponen/Detail" class="flex-1 bg-transparent text-white text-xs outline-none px-2 font-bold">
-                                        <input type="number" x-model.number="d.qty" placeholder="Jumlah/Qty" class="w-20 bg-white/10 text-white text-xs text-center rounded py-1 font-bold outline-none" title="Jumlah/Qty">
+                                        <input type="number" x-model.number="d.qty" placeholder="Jumlah/Qty" class="w-20 bg-white/10 text-white text-xs text-center rounded py-1 font-bold outline-none">
                                         <input type="number" x-model.number="d.cost" placeholder="Harga/Biaya" class="w-28 bg-white/10 text-white text-xs text-right rounded py-1 px-2 font-bold outline-none">
                                         <button type="button" @click="removeDetailItem(dIdx)" class="text-red-400 font-black px-2">&times;</button>
                                     </div>
@@ -326,9 +330,9 @@
                         </div>
                     </div>
                     <div class="col-span-3 bg-white/5 p-6 rounded-[2rem] border border-white/10 space-y-4">
-                        <div><label class="text-[10px] uppercase block mb-1 text-orange-400 italic">Harga Dasar (Modal)</label><input type="number" x-model="newProd.cost" class="u-input !h-10 !bg-white/10 !border-none !text-white"></div>
-                        <div><label class="text-[10px] uppercase block mb-1 text-blue-400 italic">Margin Modal %</label><input type="number" x-model="newProd.marginModal" class="u-input !h-10 !bg-white/10 !border-none !text-white"></div>
-                        <div><label class="text-[10px] uppercase block mb-1 text-green-400 italic">Margin Jual %</label><input type="number" x-model="newProd.marginJual" class="u-input !h-10 !bg-white/10 !border-none !text-white"></div>
+                        <div><label class="text-[10px] uppercase block mb-1 text-orange-400 italic">Harga Dasar (Modal)</label><input type="number" x-model.number="newProd.cost" class="u-input !h-10 !bg-white/10 !border-none !text-white"></div>
+                        <div><label class="text-[10px] uppercase block mb-1 text-blue-400 italic">Margin Modal %</label><input type="number" x-model.number="newProd.marginModal" class="u-input !h-10 !bg-white/10 !border-none !text-white"></div>
+                        <div><label class="text-[10px] uppercase block mb-1 text-green-400 italic">Margin Jual %</label><input type="number" x-model.number="newProd.marginJual" class="u-input !h-10 !bg-white/10 !border-none !text-white"></div>
                         <button @click="addProd()" class="w-full h-14 bg-[#F36F21] text-white rounded-xl font-black uppercase mt-4 shadow-lg hover:scale-105 transition-all" x-text="newProd.id ? 'UPDATE PRODUK' : 'SIMPAN KE KATALOG'"></button>
                     </div>
                 </div>
@@ -367,9 +371,9 @@
                                         </div>
                                     </template>
                                 </td>
-                                <td class="p-6 text-right font-bold text-slate-400" x-text="(p.currency === 'USD' ? '$' : 'Rp ') + Number(p.cost).toLocaleString()"></td>
+                                <td class="p-6 text-right font-bold text-slate-400" x-text="(p.currency === 'USD' ? '$' : 'Rp ') + Number(p.cost || 0).toLocaleString()"></td>
                                 <td class="p-6 text-right font-bold text-blue-600" x-text="formatIDR(calculateCOGS(p))"></td>
-                                <td class="p-6 text-center"><span class="bg-orange-100 text-orange-600 px-3 py-1 rounded-full font-black" x-text="p.marginJual + '%'"></span></td>
+                                <td class="p-6 text-center"><span class="bg-orange-100 text-orange-600 px-3 py-1 rounded-full font-black" x-text="(p.marginJual || 0) + '%'"></span></td>
                                 <td class="p-6 text-right font-black text-slate-900" x-text="formatIDR(calculatePriceWithMargins(p))"></td>
                                 <td class="p-6 text-center">
                                     <button @click="editProd(p)" class="text-blue-600 font-black mr-4 hover:underline">Edit</button>
@@ -382,6 +386,7 @@
             </div>
         </div>
 
+        <!-- DATABASE KLIEN -->
         <div x-show="view === 'clients'" x-cloak class="no-print">
             <h1 class="text-5xl font-black text-slate-900 uppercase italic mb-8">DATABASE KLIEN</h1>
             <div class="u-card p-10">
@@ -394,7 +399,7 @@
                 <table class="w-full">
                     <thead class="bg-slate-50 border-b"><tr><th class="p-4 text-left">Nama Klien</th><th class="p-4 text-left">Alamat</th><th class="p-4 text-center">Aksi</th></tr></thead>
                     <tbody>
-                        <template x-for="c in clients">
+                        <template x-for="c in clients" :key="c.id">
                             <tr class="border-b">
                                 <td class="p-4 font-black uppercase text-blue-900" x-text="c.name"></td>
                                 <td class="p-4 text-xs font-bold text-slate-500" x-text="c.address"></td>
@@ -409,15 +414,16 @@
             </div>
         </div>
 
+        <!-- PROFILE BISNIS -->
         <div x-show="view === 'branding'" x-cloak class="no-print">
             <h1 class="text-5xl font-black text-slate-900 uppercase italic mb-8">PROFILE BISNIS</h1>
             <div class="u-card p-12">
                 <div class="grid grid-cols-2 gap-10">
                     <div>
                         <label class="font-black text-[10px] uppercase block mb-2 text-slate-400">Nama Perusahaan</label>
-                        <input type="text" x-model="branding.name" @input="save()" class="u-input mb-6 text-lg">
+                        <input type="text" x-model="branding.name" @input="saveBranding()" class="u-input mb-6 text-lg">
                         <label class="font-black text-[10px] uppercase block mb-2 text-slate-400">Alamat Header & Footer (PDF)</label>
-                        <textarea x-model="branding.address" @input="save()" class="u-input !h-48 py-4 font-bold text-xs"></textarea>
+                        <textarea x-model="branding.address" @input="saveBranding()" class="u-input !h-48 py-4 font-bold text-xs"></textarea>
                     </div>
                     <div class="grid grid-cols-2 gap-8">
                         <div>
@@ -441,15 +447,14 @@
     </main>
 
     <script>
-        // Konfigurasi Cloud Firestore dengan kredensial proyek mss-quotation
         const firebaseConfig = {
-            apiKey: "YOUR_API_KEY", // Silakan ganti dengan Web API Key dari Firebase Console jika diperlukan
+            apiKey: "YOUR_API_KEY",
             authDomain: "mss-quotation.firebaseapp.com",
             databaseURL: "https://mss-quotation-default-rtdb.asia-southeast1.firebasedatabase.app",
             projectId: "mss-quotation",
             storageBucket: "mss-quotation.appspot.com",
             messagingSenderId: "21079565501",
-            appId: "YOUR_APP_ID" // Silakan ganti dengan App ID dari Firebase Console jika diperlukan
+            appId: "YOUR_APP_ID"
         };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
@@ -459,59 +464,87 @@
             const fixedTerms = "1. Harga Termasuk PPN 11%\n2. Harga sudah termasuk biaya pengiriman ke area jabodetabek\n3. Cara pembayaran DP (Down Payment) 50%, MOS (Material on site) 50%\n4. Produksi dan pengiriman : 4-6 minggu (setelah DP diterima). Pekerjaan : 1-2 minggu.\n5. Jika 1 minggu setelah barang diserahterimakan belum bisa dilakukan installasi karena faktor diluar kendali PT. Maju Solusi Sekuriti maka pelunasan sudah harus dilakukan.\n6. Barang yang sudah di PO tidak dapat dikembalikan\n7. Garansi 12 Bulan (Hardware), 6 Bulan (Software), 1 Bulan (Installasi) setelah serah terima pekerjaan.";
 
             return {
-                view: 'dashboard', exchangeRate: 16250,
+                view: 'dashboard', exchangeRate: 16250, isSaving: false, isMigrating: false,
                 branding: { name: 'PT. MAJU SOLUSI SEKURITI', address: defaultAddr, logo: null, signature: null },
                 catalog: [], clients: [], history: [],
                 newProd: { id: null, name: '', description: '', currency: 'IDR', cost: 0, marginModal: 10, marginJual: 25, unit: 'Unit', image: null, roundUpTo: 1000, details: [] },
                 newClient: { id: null, name: '', pic: '', address: '' },
                 form: { id_raw: null, number: '', clientName: '', clientAddress: '', userName: 'TOMY', globalDiscount: 0, terms: fixedTerms, groups: [] },
 
-                init() {
-                    // Real-time synchronization dengan Cloud Firestore
-                    db.collection('erp_store').doc('app_data').onSnapshot((doc) => {
+                async init() {
+                    // 1. OTOMATIS MIGRASI DATA LAMA DARI DOKUMEN TUNGGAL KE SUB-COLLECTION
+                    try {
+                        const oldDocRef = db.collection('erp_store').doc('app_data');
+                        const oldDoc = await oldDocRef.get();
+
+                        if (oldDoc.exists) {
+                            this.isMigrating = true;
+                            const data = oldDoc.data();
+
+                            if (data.history && Array.isArray(data.history)) {
+                                for (const q of data.history) {
+                                    const qId = String(q.id_raw || q.id || Date.now());
+                                    await db.collection('quotations').doc(qId).set(q);
+                                }
+                            }
+
+                            if (data.catalog && Array.isArray(data.catalog)) {
+                                for (const p of data.catalog) {
+                                    const pId = String(p.id || Date.now());
+                                    await db.collection('catalog').doc(pId).set(p);
+                                }
+                            }
+
+                            if (data.clients && Array.isArray(data.clients)) {
+                                for (const c of data.clients) {
+                                    const cId = String(c.id || Date.now());
+                                    await db.collection('clients').doc(cId).set(c);
+                                }
+                            }
+
+                            if (data.branding) {
+                                await db.collection('branding').doc('info').set(data.branding);
+                            }
+
+                            // Hapus dokumen lama yang melebihi limit 1MB
+                            await oldDocRef.delete();
+                            this.isMigrating = false;
+                        }
+                    } catch (err) {
+                        console.error("Proses migrasi gagal:", err);
+                        this.isMigrating = false;
+                    }
+
+                    // 2. SYNC REALTIME KOLEKSI BARU
+                    db.collection('catalog').onSnapshot((snap) => {
+                        this.catalog = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    });
+
+                    db.collection('clients').onSnapshot((snap) => {
+                        this.clients = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    });
+
+                    db.collection('quotations').onSnapshot((snap) => {
+                        this.history = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    });
+
+                    db.collection('branding').doc('info').onSnapshot((doc) => {
                         if (doc.exists) {
-                            const data = doc.data();
-                            this.catalog = data.catalog || [];
-                            this.clients = data.clients || [];
-                            this.history = data.history || [];
-                            this.branding = Object.assign(this.branding, data.branding || {});
+                            this.branding = Object.assign(this.branding, doc.data());
                             if (!this.branding.address) this.branding.address = defaultAddr;
                         }
                     });
+
                     if(!this.form.number) this.resetForm();
                 },
-                save() {
-                    db.collection('erp_store').doc('app_data').set({
-                        catalog: this.catalog,
-                        clients: this.clients,
-                        history: this.history,
-                        branding: this.branding
-                    });
+
+                saveBranding() {
+                    return db.collection('branding').doc('info').set(JSON.parse(JSON.stringify(this.branding)));
                 },
-                exportData() {
-                    const data = JSON.stringify({ catalog: this.catalog, clients: this.clients, history: this.history, branding: this.branding });
-                    const blob = new Blob([data], { type: 'application/json' });
-                    const a = document.createElement('a');
-                    a.href = URL.createObjectURL(blob);
-                    a.download = `MSS_BACKUP_${new Date().toISOString().split('T')[0]}.json`;
-                    a.click();
-                },
-                importData(e) {
-                    const file = e.target.files[0]; if(!file) return;
-                    const reader = new FileReader();
-                    reader.onload = (f) => {
-                        try {
-                            const imported = JSON.parse(f.target.result);
-                            db.collection('erp_store').doc('app_data').set(imported).then(() => {
-                                location.reload();
-                            });
-                        } catch(err) { alert('File tidak valid!'); }
-                    };
-                    reader.readAsText(file);
-                },
-                formatIDR(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n); },
+
+                formatIDR(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n || 0); },
                 calculateCOGS(p) {
-                    const base = (p.currency === 'USD') ? (Number(p.cost) * this.exchangeRate) : Number(p.cost);
+                    const base = (p.currency === 'USD') ? (Number(p.cost || 0) * this.exchangeRate) : Number(p.cost || 0);
                     return base + (base * (Number(p.marginModal || 0)/100));
                 },
                 calculatePriceWithMargins(p) { 
@@ -521,20 +554,21 @@
                     return Math.ceil(rawPrice / step) * step;
                 },
                 calculateSubTotal() {
+                    if (!this.form.groups) return 0;
                     return this.form.groups.reduce((acc, g) => {
-                        const gSum = g.items.reduce((a, b) => a + (this.calculatePriceWithMargins(b) * b.qty), 0);
+                        const gSum = (g.items || []).reduce((a, b) => a + (this.calculatePriceWithMargins(b) * (Number(b.qty) || 0)), 0);
                         return acc + (gSum * (1 - (Number(g.discount || 0)/100)));
                     }, 0);
                 },
-                calculatePPN() { return (this.calculateSubTotal() * (1 - (this.form.globalDiscount/100))) * 0.11; },
-                calculateGrandTotal() { return (this.calculateSubTotal() * (1 - (this.form.globalDiscount/100))) * 1.11; },
+                calculatePPN() { return (this.calculateSubTotal() * (1 - (Number(this.form.globalDiscount || 0)/100))) * 0.11; },
+                calculateGrandTotal() { return (this.calculateSubTotal() * (1 - (Number(this.form.globalDiscount || 0)/100))) * 1.11; },
                 updateQuotationNumber() { 
                     if(!this.form.number || this.form.number.startsWith('QT/')) {
                         this.form.number = `QT/${new Date().getTime()}/${(this.form.userName || 'MSS').substring(0,3).toUpperCase()}`; 
                     }
                 },
                 resetForm() { 
-                    this.form = { id_raw: Date.now(), number: '', clientName: '', clientAddress: '', userName: 'TOMY', globalDiscount: 0, terms: fixedTerms, groups: [{ name: 'A. PERALATAN UTAMA', items: [], discount: 0 }] }; 
+                    this.form = { id_raw: Date.now().toString(), number: '', clientName: '', clientAddress: '', userName: 'TOMY', globalDiscount: 0, terms: fixedTerms, groups: [{ name: 'A. PERALATAN UTAMA', items: [], discount: 0 }] }; 
                     this.updateQuotationNumber();
                 },
                 selectClient(id) {
@@ -545,19 +579,31 @@
                 addGroup() { this.form.groups.push({ name: 'KATEGORI BARU', items: [], discount: 0 }); },
                 addItem(gIdx) { this.form.groups[gIdx].items.push({ name: '', description: '', qty: 1, unit: 'Unit', cost: 0, marginModal: 10, marginJual: 25, currency: 'IDR', roundUpTo: 1000, image: null }); },
                 removeItem(gIdx, iIdx) { this.form.groups[gIdx].items.splice(iIdx, 1); },
-                saveQuote() {
-                    const q = JSON.parse(JSON.stringify(this.form));
-                    q.id = this.form.id_raw || Date.now();
-                    q.totalValue = this.calculateGrandTotal();
-                    const idx = this.history.findIndex(h => h.id === q.id);
-                    if(idx > -1) this.history[idx] = q; else this.history.unshift(q);
-                    this.save(); this.resetForm(); this.view = 'dashboard';
+                
+                async saveQuote() {
+                    this.isSaving = true;
+                    try {
+                        const docId = String(this.form.id_raw || Date.now());
+                        const q = JSON.parse(JSON.stringify(this.form));
+                        q.totalValue = this.calculateGrandTotal();
+                        
+                        await db.collection('quotations').doc(docId).set(q);
+                        this.view = 'dashboard';
+                        this.resetForm();
+                    } catch(err) {
+                        alert('Gagal menyimpan penawaran: ' + err.message);
+                    } finally {
+                        this.isSaving = false;
+                    }
                 },
                 printQuote(q) { this.form = JSON.parse(JSON.stringify(q)); this.view = 'print'; },
                 editQuote(q) { this.form = JSON.parse(JSON.stringify(q)); this.form.id_raw = q.id; this.view = 'create'; },
-                deleteQuote(idx) { if(confirm('Hapus penawaran ini?')) { this.history.splice(idx, 1); this.save(); } },
+                async deleteQuote(id) { 
+                    if(confirm('Hapus penawaran ini?')) { 
+                        await db.collection('quotations').doc(String(id)).delete(); 
+                    } 
+                },
                 
-                // Fungsi Tambahan untuk Rincian Detail Item
                 addDetailItem() {
                     if (!this.newProd.details) this.newProd.details = [];
                     this.newProd.details.push({ name: '', qty: 1, cost: 0 });
@@ -582,26 +628,39 @@
                     if (!this.newProd.details) this.newProd.details = [];
                 },
 
-                addProd() { 
+                async addProd() { 
                     if (this.newProd.details && this.newProd.details.length > 0) {
                         this.newProd.cost = this.calculateDetailsTotalCost(this.newProd);
                     }
-                    if(this.newProd.id) { const idx = this.catalog.findIndex(p => p.id === this.newProd.id); this.catalog[idx] = JSON.parse(JSON.stringify(this.newProd)); } 
-                    else { this.catalog.unshift({...JSON.parse(JSON.stringify(this.newProd)), id: Date.now()}); }
+                    const docId = String(this.newProd.id || Date.now());
+                    const data = JSON.parse(JSON.stringify(this.newProd));
+                    delete data.id;
+
+                    await db.collection('catalog').doc(docId).set(data);
                     this.newProd = { id: null, name: '', description: '', currency: 'IDR', cost: 0, marginModal: 10, marginJual: 25, unit: 'Unit', image: null, roundUpTo: 1000, details: [] };
-                    this.save();
                 },
-                deleteProd(id) { if(confirm('Hapus produk?')) { this.catalog = this.catalog.filter(p => p.id !== id); this.save(); } },
+                async deleteProd(id) { 
+                    if(confirm('Hapus produk?')) { 
+                        await db.collection('catalog').doc(String(id)).delete(); 
+                    } 
+                },
                 uploadProdImage(e) { const reader = new FileReader(); reader.onload = (f) => this.newProd.image = f.target.result; reader.readAsDataURL(e.target.files[0]); },
-                addClient() {
-                    if(this.newClient.id) { const idx = this.clients.findIndex(c => c.id === this.newClient.id); this.clients[idx] = {...this.newClient}; } 
-                    else { this.clients.unshift({...this.newClient, id: Date.now()}); }
+                
+                async addClient() {
+                    const docId = String(this.newClient.id || Date.now());
+                    const data = JSON.parse(JSON.stringify(this.newClient));
+                    delete data.id;
+
+                    await db.collection('clients').doc(docId).set(data);
                     this.newClient = { id: null, name: '', pic: '', address: '' };
-                    this.save();
                 },
-                deleteClient(id) { if(confirm('Hapus klien?')) { this.clients = this.clients.filter(c => c.id !== id); this.save(); } },
-                uploadLogo(e) { const reader = new FileReader(); reader.onload = (f) => { this.branding.logo = f.target.result; this.save(); }; reader.readAsDataURL(e.target.files[0]); },
-                uploadSig(e) { const reader = new FileReader(); reader.onload = (f) => { this.branding.signature = f.target.result; this.save(); }; reader.readAsDataURL(e.target.files[0]); }
+                async deleteClient(id) { 
+                    if(confirm('Hapus klien?')) { 
+                        await db.collection('clients').doc(String(id)).delete(); 
+                    } 
+                },
+                uploadLogo(e) { const reader = new FileReader(); reader.onload = (f) => { this.branding.logo = f.target.result; this.saveBranding(); }; reader.readAsDataURL(e.target.files[0]); },
+                uploadSig(e) { const reader = new FileReader(); reader.onload = (f) => { this.branding.signature = f.target.result; this.saveBranding(); }; reader.readAsDataURL(e.target.files[0]); }
             }
         }
     </script>
